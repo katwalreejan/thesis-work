@@ -45,3 +45,130 @@
   .view-uploads{text-align:left;padding-top:0}
   .submission-content{grid-template-columns:1fr;margin-left:0;gap:18px}
 }
+
+/* Shared polish for the workspace surfaces. */
+.workspace {
+  animation: enter-workspace .45s ease both;
+}
+
+.app-header {
+  background: rgba(255, 254, 251, .88);
+  backdrop-filter: blur(14px);
+  position: sticky;
+  top: 0;
+  z-index: 5;
+}
+
+.brand span {
+  font-family: 'Syne';
+  font-size: 14px;
+  letter-spacing: -.2px;
+}
+
+.page-top {
+  margin-bottom: 52px;
+}
+
+.page-top h1 {
+  max-width: 720px;
+  line-height: 1.03;
+}
+
+.date-chip {
+  border: 1px solid var(--line);
+  background: rgba(255, 254, 251, .72);
+  box-shadow: 4px 4px 0 var(--mint);
+}
+
+.status-dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-right: 7px;
+  border-radius: 50%;
+  background: var(--coral);
+  box-shadow: 0 0 0 4px rgba(237, 121, 93, .13);
+}
+
+.upload-panel,
+.how-panel,
+.feedback-result,
+.activity-section,
+.student-detail {
+  box-shadow: 0 12px 30px rgba(23, 37, 35, .045);
+}
+
+.upload-panel h2,
+.how-panel h2 {
+  line-height: 1.08;
+}
+
+.dropzone {
+  transition: border-color .2s ease, background .2s ease, transform .2s ease;
+}
+
+.dropzone:hover,
+.dropzone.has-file {
+  border-color: var(--green);
+  background: #f3faf4;
+  transform: translateY(-2px);
+}
+
+.primary-button {
+  transition: transform .2s ease, box-shadow .2s ease, background .2s ease;
+}
+
+.primary-button:hover:not(:disabled) {
+  background: #155344;
+  box-shadow: 4px 4px 0 var(--coral);
+  transform: translate(-2px, -2px);
+}
+
+.stat-card,
+.activity-row,
+.student-row {
+  transition: background .2s ease, transform .2s ease;
+}
+
+.stat-card:hover,
+.activity-row:hover,
+.student-row:hover {
+  background: #fbfdf9;
+}
+
+.view-uploads {
+  transition: color .2s ease, transform .2s ease;
+}
+
+.view-uploads:hover {
+  transform: translateX(3px);
+}
+
+@keyframes enter-workspace {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@media (max-width: 800px) {
+  .app-header {
+    padding: 12px 20px;
+  }
+
+  .brand span,
+  .user-name {
+    display: none;
+  }
+
+  .page-top {
+    margin-bottom: 32px;
+  }
+
+  .page-top h1 {
+    font-size: 36px;
+  }
+
+  .date-chip {
+    margin-top: 20px;
+    width: fit-content;
+  }
+}
