@@ -1,0 +1,47 @@
+.section-title{border-bottom:0}
+
+.activity-row{grid-template-columns:35px 1.2fr 1.5fr 2fr 60px;align-items:start}
+.activity-student small,.activity-upload small,.activity-feedback small{display:block;color:var(--green);font:500 10px 'DM Mono';letter-spacing:.08em;margin-bottom:5px}
+.activity-student strong,.activity-upload strong{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.activity-student span{display:block;color:var(--muted);font-size:12px;margin-top:4px}
+.activity-feedback span{display:block;color:var(--muted);font-size:12px;white-space:normal;overflow-wrap:anywhere;line-height:1.5}
+@media(max-width:800px){
+  .activity-row{grid-template-columns:30px 1fr 52px;gap:10px}
+  .activity-student,.activity-upload,.activity-feedback{grid-column:2}
+  .activity-upload{grid-row:2}
+  .activity-feedback{grid-row:3}
+  .mini-score{grid-column:3;grid-row:1}
+  .activity-feedback span{white-space:normal}
+}
+
+.student-list-head,.student-row{display:grid;grid-template-columns:minmax(220px,1fr) 100px 150px;align-items:center;gap:20px}
+.student-list-head{padding:0 0 12px;border-bottom:1px solid var(--line);color:var(--green);font:500 10px 'DM Mono';letter-spacing:.08em}
+.student-row{padding:18px 0;border-bottom:1px solid var(--line)}
+.student-name{display:flex;align-items:center;gap:12px;min-width:0}
+.student-name strong,.student-name small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.student-name small{color:var(--muted);font-size:12px;margin-top:4px}
+.student-avatar{display:grid;place-items:center;flex:0 0 34px;width:34px;height:34px;background:var(--mint);color:var(--green);font:700 15px 'Syne'}
+.upload-count{font:500 14px 'DM Mono'}
+.view-uploads,.back-button{border:0;background:none;color:var(--green);font-size:12px;font-weight:700;text-align:right;padding:8px 0}
+.view-uploads:hover,.back-button:hover{text-decoration:underline}
+.view-uploads:disabled{cursor:wait;opacity:.55}
+.student-detail{background:var(--paper);border:1px solid var(--line);padding:clamp(24px,4vw,46px)}
+.detail-header{border-bottom:1px solid var(--line);padding-bottom:26px;margin-bottom:6px}
+.back-button{display:block;margin-bottom:28px;padding:0}
+.detail-header h2{font-size:34px;margin:12px 0 7px}
+.submission-card{padding:28px 0;border-bottom:1px solid var(--line)}
+.submission-heading{display:flex;justify-content:space-between;align-items:flex-start;gap:20px}
+.submission-heading>div:first-child{display:flex;gap:14px;min-width:0}
+.submission-number{color:var(--coral);font:500 14px 'DM Mono';padding-top:2px}
+.submission-heading h3{font-family:'Syne';font-size:20px;margin:8px 0 0;overflow-wrap:anywhere}
+.submission-content{display:grid;grid-template-columns:1fr 1.5fr;gap:28px;margin:24px 0 0 29px}
+.submission-text,.submission-feedback{margin:9px 0 0;color:var(--muted);font-size:14px;line-height:1.6;white-space:pre-wrap;overflow-wrap:anywhere}
+.submission-feedback{color:var(--ink)}
+
+@media(max-width:800px){
+  .student-list-head,.student-row{grid-template-columns:1fr 60px}
+  .student-list-head span:nth-child(3),.view-uploads{grid-column:1 / -1}
+  .student-row{gap:10px}
+  .view-uploads{text-align:left;padding-top:0}
+  .submission-content{grid-template-columns:1fr;margin-left:0;gap:18px}
+}
