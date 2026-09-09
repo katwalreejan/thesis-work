@@ -29,6 +29,16 @@
 .detail-header{border-bottom:1px solid var(--line);padding-bottom:26px;margin-bottom:6px}
 .back-button{display:block;margin-bottom:28px;padding:0}
 .detail-header h2{font-size:34px;margin:12px 0 7px}
+.submission-actions{display:flex;gap:16px;margin:22px 0 0 29px}
+.submission-actions button,.assignment-form-actions button:first-child{border:0;background:none;color:var(--green);font-size:12px;font-weight:700;padding:8px 0}
+.submission-actions button:last-child{color:#a44b37}
+.submission-actions button:hover,.assignment-form-actions button:first-child:hover{text-decoration:underline}
+.assignment-form{border-top:1px solid var(--line);padding-top:20px}
+.assignment-form label{margin-top:14px}
+.assignment-form textarea,.assignment-form select{display:block;width:100%;margin-top:8px;border:1px solid var(--line);background:#fbfdf9;color:var(--ink);padding:12px 14px;resize:vertical}
+.assignment-form textarea:focus,.assignment-form select:focus{outline:2px solid var(--mint);border-color:var(--green)}
+.assignment-form-actions{display:flex;align-items:center;justify-content:flex-end;gap:18px;margin-top:20px}
+.assignment-form-actions .primary-button{margin:0}
 .submission-card{padding:28px 0;border-bottom:1px solid var(--line)}
 .submission-heading{display:flex;justify-content:space-between;align-items:flex-start;gap:20px}
 .submission-heading>div:first-child{display:flex;gap:14px;min-width:0}
@@ -44,6 +54,7 @@
   .student-row{gap:10px}
   .view-uploads{text-align:left;padding-top:0}
   .submission-content{grid-template-columns:1fr;margin-left:0;gap:18px}
+  .submission-actions{margin-left:0}
 }
 
 /* Shared polish for the workspace surfaces. */

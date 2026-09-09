@@ -54,6 +54,13 @@ class LoginRequest(BaseModel):
     password: str
 
 
+class TeacherUploadRequest(BaseModel):
+    filename: str = Field(min_length=1, max_length=255)
+    text: str = Field(default="", max_length=20_000)
+    feedback: str = Field(default="", max_length=5_000)
+    is_correct: bool | None = None
+
+
 def hash_password(password: str, salt: bytes | None = None) -> str:
     salt = salt or secrets.token_bytes(16)
     digest = hashlib.pbkdf2_hmac("sha256", password.encode(), salt, 210_000)
@@ -124,6 +131,26 @@ async def me(user: dict = Depends(current_user)):
     return {"name": user["name"], "email": user["email"], "role": user["role"]}
 
 
+@app.get("/api/student/uploads")
+async def student_uploads(user: dict = Depends(current_user)):
+    if user["role"] != "student":
+        raise HTTPException(status_code=403, detail="Student access required")
+    uploads = []
+    cursor = ocr_results.find({"user_id": user["_id"]}).sort("created_at", -1)
+    async for item in cursor:
+        grading = item.get("grading", {})
+        uploads.append({
+            "id": str(item["_id"]),
+            "filename": item.get("filename", "Untitled upload"),
+            "is_correct": grading.get("is_correct"),
+            "question": grading.get("question", "Question unavailable"),
+            "answer": grading.get("answer", "Answer unavailable"),
+            "feedback": grading.get("feedback", "Feedback unavailable"),
+            "created_at": item.get("created_at").isoformat() if item.get("created_at") else None,
+        })
+    return {"uploads": uploads}
+
+
 @app.get("/api/teacher/dashboard")
 async def teacher_dashboard(user: dict = Depends(current_user)):
     if user["role"] != "teacher":
@@ -158,11 +185,88 @@ async def teacher_student_detail(student_id: str, user: dict = Depends(current_u
             "id": str(item["_id"]),
             "filename": item.get("filename", "Untitled upload"),
             "text": item.get("text", ""),
+            "is_correct": grading.get("is_correct"),
             "score": 100 if grading.get("is_correct") else 0,
             "feedback": grading.get("feedback", "No feedback yet"),
             "created_at": item.get("created_at").isoformat() if item.get("created_at") else None,
         })
     return {"student": {"id": str(student["_id"]), "name": student["name"], "email": student["email"]}, "uploads": uploads}
+
+
+async def teacher_student(student_id: str):
+    try:
+        student_object_id = ObjectId(student_id)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail="Invalid student id") from exc
+    student = await users.find_one({"_id": student_object_id, "role": "student"})
+    if not student:
+        raise HTTPException(status_code=404, detail="Student not found")
+    return student_object_id
+
+
+def upload_response(upload_id, item):
+    grading = item.get("grading", {})
+    return {
+        "id": str(upload_id),
+        "filename": item.get("filename", "Untitled upload"),
+        "text": item.get("text", ""),
+        "score": 100 if grading.get("is_correct") else 0,
+        "feedback": grading.get("feedback", "No feedback yet"),
+        "created_at": item.get("created_at").isoformat() if item.get("created_at") else None,
+    }
+
+
+@app.post("/api/teacher/students/{student_id}/uploads")
+async def teacher_add_upload(student_id: str, data: TeacherUploadRequest, user: dict = Depends(current_user)):
+    if user["role"] != "teacher":
+        raise HTTPException(status_code=403, detail="Teacher access required")
+    student_object_id = await teacher_student(student_id)
+    item = {
+        "user_id": student_object_id,
+        "filename": data.filename.strip(),
+        "text": data.text,
+        "grading": {"is_correct": data.is_correct, "feedback": data.feedback},
+        "created_at": datetime.now(timezone.utc),
+    }
+    result = await ocr_results.insert_one(item)
+    return upload_response(result.inserted_id, item)
+
+
+@app.patch("/api/teacher/uploads/{upload_id}")
+async def teacher_edit_upload(upload_id: str, data: TeacherUploadRequest, user: dict = Depends(current_user)):
+    if user["role"] != "teacher":
+        raise HTTPException(status_code=403, detail="Teacher access required")
+    try:
+        upload_object_id = ObjectId(upload_id)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail="Invalid upload id") from exc
+    item = await ocr_results.find_one({"_id": upload_object_id})
+    if not item:
+        raise HTTPException(status_code=404, detail="Upload not found")
+    await teacher_student(str(item["user_id"]))
+    await ocr_results.update_one({"_id": upload_object_id}, {"$set": {
+        "filename": data.filename.strip(),
+        "text": data.text,
+        "grading": {"is_correct": data.is_correct, "feedback": data.feedback},
+    }})
+    item.update({"filename": data.filename.strip(), "text": data.text, "grading": {"is_correct": data.is_correct, "feedback": data.feedback}})
+    return upload_response(upload_object_id, item)
+
+
+@app.delete("/api/teacher/uploads/{upload_id}")
+async def teacher_delete_upload(upload_id: str, user: dict = Depends(current_user)):
+    if user["role"] != "teacher":
+        raise HTTPException(status_code=403, detail="Teacher access required")
+    try:
+        upload_object_id = ObjectId(upload_id)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail="Invalid upload id") from exc
+    item = await ocr_results.find_one({"_id": upload_object_id})
+    if not item:
+        raise HTTPException(status_code=404, detail="Upload not found")
+    await teacher_student(str(item["user_id"]))
+    await ocr_results.delete_one({"_id": upload_object_id})
+    return {"id": upload_id}
 
 
 @app.post("/api/upload")
