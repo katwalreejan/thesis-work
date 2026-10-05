@@ -2,10 +2,11 @@ export const TOKEN_KEY = 'sfs_token'
 
 export const api = async (path, options = {}) => {
   const token = localStorage.getItem(TOKEN_KEY)
+  const isFormData = options.body instanceof FormData
   const response = await fetch(`/api${path}`, {
     ...options,
     headers: {
-      'Content-Type': 'application/json',
+      ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...options.headers,
     },

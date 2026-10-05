@@ -8,3 +8,7 @@ client = AsyncIOMotorClient(MONGODB_URI)
 db = client.get_default_database()
 ocr_results = db["ocr_results"]
 users = db["users"]
+assignments = db["assignments"]
+submissions = db["submissions"]
+classes = db["classes"]
+subjects = db["subjects"]

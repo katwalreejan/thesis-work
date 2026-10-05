@@ -20,7 +20,7 @@ export default function App() {
   }, [])
 
   const logout = () => { localStorage.removeItem(TOKEN_KEY); setUser(null) }
-  if (checking) return <div className="loading">Preparing your workspace...</div>
+  if (checking) return <div className="loading">Getting things ready...</div>
   if (!user) return <Auth onLogin={setUser} />
   return <><Header user={user} onLogout={logout} />{user.role === 'teacher' ? <Teacher /> : <Student user={user} />}</>
 }

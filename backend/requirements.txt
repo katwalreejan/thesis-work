@@ -1,9 +1,11 @@
 fastapi
-uvicorn[standard]
+uvicorn
 python-multipart
 motor
 python-dotenv
 paddlepaddle
 paddleocr
+python-bidi==0.4.2
 httpx
 PyJWT
+pypdf
