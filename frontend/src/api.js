@@ -15,3 +15,15 @@ export const api = async (path, options = {}) => {
   if (!response.ok) throw new Error(data.detail || 'Something went wrong')
   return data
 }
+
+export const apiFile = async (path) => {
+  const token = localStorage.getItem(TOKEN_KEY)
+  const response = await fetch(path, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  })
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}))
+    throw new Error(data.detail || 'Could not load this file')
+  }
+  return URL.createObjectURL(await response.blob())
+}

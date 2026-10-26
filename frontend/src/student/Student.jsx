@@ -1,5 +1,6 @@
 ﻿import { useEffect, useState } from 'react'
 import { api, TOKEN_KEY } from '../api'
+import SecureFile from '../components/SecureFile'
 
 const formatDate = (value) => value ? new Date(value).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'No date'
 
@@ -18,7 +19,7 @@ const getQuestions = (item) => {
   const questions = parts.length ? parts : content ? [content] : []
   return questions.map((question, index) => ({
     question: question.replace(/^\s*(?:question\s*)?\d+[.)]\s*/i, ''),
-    answer: questions.length === 1 ? item.ocr_text : '',
+    answer: questions.length === 1 ? item.submission_text || item.ocr_text : '',
     correct_answer: null,
     is_correct: questions.length === 1 && item.ai_score === 100 ? true : null,
     feedback: questions.length === 1 ? item.ai_feedback : '',
@@ -44,8 +45,8 @@ function FeedbackDetails({ item }) {
             <h4>Question {index + 1}</h4>
             <p className="feedback-question-text">{question.question || 'Question not identified'}</p>
             <div className="feedback-answer-grid">
-              <div><span>Your Answer</span><p>{question.answer || item.ocr_text || 'No answer identified'}</p></div>
-              <div><span>Correct Answer</span><p>{question.correct_answer || 'Not provided'}</p></div>
+              <div><span>Your Answer</span><p>{question.answer || (questions.length === 1 ? item.submission_text || item.ocr_text : '') || 'No answer identified for this question'}</p></div>
+              <div><span>Example of Correct Answer</span><p>{question.correct_answer || 'Not provided'}</p></div>
             </div>
             <p className={`feedback-status ${question.is_correct === true ? 'correct' : question.is_correct === false ? 'incorrect' : 'unknown'}`}>
               Status: {question.is_correct === true ? '✓ Correct' : question.is_correct === false ? '✕ Needs another look' : 'Review with your teacher'}
@@ -60,21 +61,29 @@ function FeedbackDetails({ item }) {
         <div><span>AI Feedback</span><p>{item.ai_feedback || 'No AI feedback yet.'}</p></div>
         {feedbackSubmitted && <div className="teacher-feedback-summary"><span>Submitted Teacher Feedback</span><p>{item.teacher_feedback || 'Your teacher submitted feedback without an additional comment.'}</p></div>}
       </div>
+      {item.submission_text && <div className="submission-original"><p className="eyebrow">TYPED ANSWER</p><p>{item.submission_text}</p></div>}
+      {(item.uploaded_files || []).length > 0 && <div className="submission-files"><p className="eyebrow">UPLOADED WORK</p>{item.uploaded_files.map((file) => <SecureFile key={file.url} file={file} />)}</div>}
     </div>
   )
 }
 
 function UploadForm({ assignment, onDone }) {
-  const [file, setFile] = useState(null)
+  const [files, setFiles] = useState([])
+  const [answer, setAnswer] = useState('')
   const [message, setMessage] = useState('')
+  const submissionMethod = answer.trim() && files.length ? 'Typed answer + uploaded work' : answer.trim() ? 'Typed answer' : files.length ? 'Uploaded work' : 'Choose a method'
 
   const submit = async (event) => {
     event.preventDefault()
-    if (!file) return
+    if (!answer.trim() && !files.length) {
+      setMessage('Type an answer or choose at least one image or PDF.')
+      return
+    }
 
     setMessage('Uploading...')
     const body = new FormData()
-    body.append('file', file)
+    body.append('answer_text', answer)
+    files.forEach((file) => body.append('files', file))
 
     try {
       const response = await fetch(`/api/student/assignments/${assignment.id}/submit`, {
@@ -93,16 +102,48 @@ function UploadForm({ assignment, onDone }) {
 
   return (
     <form className="classroom-upload" onSubmit={submit}>
-      <input
-        type="file"
-        accept="image/*,.pdf"
-        required
-        onChange={(event) => setFile(event.target.files[0] || null)}
-      />
-      <button className="primary-button" type="submit" disabled={!file}>
-        {message || 'Upload work'}
+      <label>Type Answer
+        <textarea rows="5" value={answer} onChange={(event) => { setAnswer(event.target.value); if (message !== 'Uploading...') setMessage('') }} placeholder="Write your answer here..." />
+      </label>
+      <label>Upload Work
+        <input
+          type="file"
+          accept="image/*,.pdf,application/pdf"
+          multiple
+          onChange={(event) => {
+            const chosen = Array.from(event.target.files || [])
+            const invalid = chosen.find((file) => {
+              const pdf = file.type === 'application/pdf' || /\.pdf$/i.test(file.name)
+              const image = file.type.startsWith('image/') || /\.(png|jpe?g|gif|webp|bmp|tiff?)$/i.test(file.name)
+              return !(image || pdf) || file.size > 10 * 1024 * 1024
+            })
+            if (invalid) {
+              setFiles([])
+              setMessage(`${invalid.name} must be an image or PDF no larger than 10MB.`)
+            } else {
+              setFiles(chosen)
+              setMessage('')
+            }
+          }}
+        />
+      </label>
+      <p className="submission-method">Selected submission method: <strong>{submissionMethod}</strong>{files.length > 0 && <span> · {files.map((file) => file.name).join(', ')}</span>}</p>
+      <button className="primary-button" type="submit" disabled={message === 'Uploading...'}>
+        {message || 'Send work'}
       </button>
     </form>
+  )
+}
+
+function SubmissionOriginal({ submission }) {
+  if (!submission) return null
+  return (
+    <div className="submission-original">
+      {submission.submission_text && <><p className="eyebrow">TYPED ANSWER</p><p>{submission.submission_text}</p></>}
+      {submission.ocr_text && <><p className="eyebrow">EXTRACTED TEXT</p><p>{submission.ocr_text}</p></>}
+      {(submission.uploaded_files || []).length > 0 && <div className="submission-files"><p className="eyebrow">ORIGINAL UPLOADS</p>{submission.uploaded_files.map((file) => <SecureFile key={file.url} file={file} />)}</div>}
+      <p className="muted">Submission method: {submission.submission_method?.replaceAll('_', ' ') || 'upload'}</p>
+    </div>
   )
 }
 
@@ -111,6 +152,7 @@ export default function Student({ user }) {
   const [dashboard, setDashboard] = useState(null)
   const [assignments, setAssignments] = useState([])
   const [submissions, setSubmissions] = useState([])
+  const [selectedAssignmentId, setSelectedAssignmentId] = useState(null)
   const [selectedSubject, setSelectedSubject] = useState(null)
   const [assignmentSearch, setAssignmentSearch] = useState('')
   const [assignmentStatus, setAssignmentStatus] = useState('')
@@ -142,6 +184,9 @@ export default function Student({ user }) {
 
   const normalizedSearch = assignmentSearch.trim().toLowerCase()
   const subjectOptions = [...new Set(assignments.map((assignment) => assignment.subject).filter(Boolean))].sort()
+  const selectedAssignment = assignments.find((assignment) => assignment.id === selectedAssignmentId)
+  const selectedAssignmentStatus = selectedAssignment ? getStatusMeta(selectedAssignment.submission) : null
+  const selectedFeedbackItem = selectedAssignment?.submission ? { ...selectedAssignment.submission, assignment: selectedAssignment } : null
   const filteredAssignments = assignments
     .filter((assignment) => {
       const status = getStatusMeta(assignment.submission)
@@ -149,8 +194,17 @@ export default function Student({ user }) {
       return matchesSearch && (!selectedSubject || assignment.subject === selectedSubject) && (!assignmentStatus || status.key === assignmentStatus)
     })
     .sort((first, second) => {
+      const statusOrder = { pending: 0, submitted: 1, feedback: 2 }
+      const firstStatus = getStatusMeta(first.submission).key
+      const secondStatus = getStatusMeta(second.submission).key
+      const statusDifference = statusOrder[firstStatus] - statusOrder[secondStatus]
+      if (statusDifference) return statusDifference
+
       const firstDate = first.due_date ? new Date(first.due_date).getTime() : Number.POSITIVE_INFINITY
       const secondDate = second.due_date ? new Date(second.due_date).getTime() : Number.POSITIVE_INFINITY
+      if (!Number.isFinite(firstDate) || !Number.isFinite(secondDate)) {
+        return Number.isFinite(firstDate) ? -1 : Number.isFinite(secondDate) ? 1 : 0
+      }
       return assignmentSort === 'latest' ? secondDate - firstDate : firstDate - secondDate
     })
   const assignmentPageSize = 8
@@ -195,7 +249,7 @@ export default function Student({ user }) {
       {error && <p className="error">{error}</p>}
 
       <nav className="classroom-tabs" aria-label="Student pages">
-        {[['overview', 'Home'], ['assignments', 'My work'], ['submissions', 'Previous work']].map(([key, label]) => (
+        {[['overview', 'Home'], ['assignments', 'My Assignments'], ['submissions', 'My Submissions']].map(([key, label]) => (
           <button
             key={key}
             type="button"
@@ -321,89 +375,110 @@ export default function Student({ user }) {
         <section className="classroom-section">
           <div className="section-title">
             <div>
-              <p className="eyebrow">My work</p>
-              <h2>{selectedSubject || 'Assignments'}</h2>
+              <p className="eyebrow">My Assignments</p>
+              <h2>{selectedAssignment?.title || selectedSubject || 'Assignments'}</h2>
             </div>
-            <span>{filteredAssignments.length} of {assignments.length} shown</span>
+            <span>{selectedAssignment ? 'Assignment details' : `${filteredAssignments.length} of ${assignments.length} shown`}</span>
           </div>
 
-          <div className="student-assignment-filters">
-            <label className="assignment-search">Search assignments
-              <input type="search" placeholder="Title, subject, or teacher" value={assignmentSearch} onChange={updateAssignmentView('search')} />
-            </label>
-            <label>Subject
-              <select value={selectedSubject || ''} onChange={(event) => { setSelectedSubject(event.target.value || null); setAssignmentPage(1) }}>
-                <option value="">All subjects</option>
-                {subjectOptions.map((subject) => <option key={subject}>{subject}</option>)}
-              </select>
-            </label>
-            <label>Status
-              <select value={assignmentStatus} onChange={updateAssignmentView('status')}>
-                <option value="">All statuses</option>
-                <option value="pending">Pending</option>
-                <option value="submitted">Submitted</option>
-                <option value="feedback">Feedback Received</option>
-              </select>
-            </label>
-            <label>Due date
-              <select value={assignmentSort} onChange={updateAssignmentView('sort')}>
-                <option value="soonest">Soonest first</option>
-                <option value="latest">Latest first</option>
-              </select>
-            </label>
-            <button className="secondary-button filter-reset" type="button" onClick={resetAssignmentView}>Clear filters</button>
-          </div>
-
-          {visibleAssignments.length ? (
-            <div className="section-scroll assignment-list">
-              {visibleAssignments.map((assignment) => {
-              const status = getStatusMeta(assignment.submission)
-              const feedbackItem = assignment.submission ? { ...assignment.submission, assignment } : null
-              return (
-                <article className="assignment-card" key={assignment.id}>
-                  <div className="assignment-card-head">
-                    <div>
-                      <span className="subject-tag">{assignment.subject}</span>
-                      <h3>{assignment.title}</h3>
-                      <p>
-                        Due {formatDate(assignment.due_date)} · Teacher {assignment.teacher_name || 'Classroom'}
-                      </p>
-                    </div>
-                    <span className={`status-indicator ${status.className}`}>{status.label}</span>
+          {selectedAssignment ? (
+            <>
+              <button className="back-button" type="button" onClick={() => setSelectedAssignmentId(null)}>← Back to assignments</button>
+              <article className="assignment-card">
+                <div className="assignment-card-head">
+                  <div>
+                    <span className="subject-tag">{selectedAssignment.subject}</span>
+                    <h3>{selectedAssignment.title}</h3>
+                    <p>
+                      Due {formatDate(selectedAssignment.due_date)} · Teacher {selectedAssignment.teacher_name || 'Classroom'}
+                    </p>
                   </div>
+                  <span className={`status-indicator ${selectedAssignmentStatus.className}`}>{selectedAssignmentStatus.label}</span>
+                </div>
 
-                  <div className="assignment-card-body">
-                    <p>{assignment.instructions || assignment.assignment_content || 'Your teacher has shared this task for you to complete.'}</p>
-                    {status.key === 'feedback' ? (
-                      <>
-                        <button type="button" className="feedback-open-button" onClick={() => setOpenFeedback(openFeedback === assignment.id ? null : assignment.id)}>
-                          {openFeedback === assignment.id ? 'Hide feedback' : 'View Feedback'}
-                        </button>
-                        {openFeedback === assignment.id && <FeedbackDetails item={feedbackItem} />}
-                      </>
-                    ) : (
-                      <UploadForm
-                        assignment={assignment}
-                        onDone={async () => {
-                          await load()
-                          setTab('submissions')
-                        }}
-                      />
-                    )}
-                  </div>
-                </article>
-              )
-              })}
-            </div>
+                <div className="assignment-card-body">
+                  <p>{selectedAssignment.instructions || selectedAssignment.assignment_content || 'Your teacher has shared this task for you to complete.'}</p>
+                  {selectedAssignment.assignment_file && <div className="assignment-resource"><p className="eyebrow">ASSIGNMENT FILE</p><SecureFile file={selectedAssignment.assignment_file} /></div>}
+                  {selectedAssignment.submission && selectedAssignmentStatus.key !== 'feedback' && <SubmissionOriginal submission={selectedAssignment.submission} />}
+                  {selectedAssignmentStatus.key === 'feedback' ? (
+                    <>
+                      <button type="button" className="feedback-open-button" onClick={() => setOpenFeedback(openFeedback === selectedAssignment.id ? null : selectedAssignment.id)}>
+                        {openFeedback === selectedAssignment.id ? 'Hide feedback' : 'View Feedback'}
+                      </button>
+                      {openFeedback === selectedAssignment.id && <FeedbackDetails item={selectedFeedbackItem} />}
+                    </>
+                  ) : (
+                    <UploadForm
+                      assignment={selectedAssignment}
+                      onDone={async () => {
+                        await load()
+                        setSelectedAssignmentId(null)
+                        setTab('submissions')
+                      }}
+                    />
+                  )}
+                </div>
+              </article>
+            </>
           ) : (
-            <div className="empty-state">No assignments match these filters.</div>
-          )}
+            <>
+              <div className="student-assignment-filters">
+                <label className="assignment-search">Search assignments
+                  <input type="search" placeholder="Title, subject, or teacher" value={assignmentSearch} onChange={updateAssignmentView('search')} />
+                </label>
+                <label>Subject
+                  <select value={selectedSubject || ''} onChange={(event) => { setSelectedSubject(event.target.value || null); setAssignmentPage(1) }}>
+                    <option value="">All subjects</option>
+                    {subjectOptions.map((subject) => <option key={subject}>{subject}</option>)}
+                  </select>
+                </label>
+                <label>Status
+                  <select value={assignmentStatus} onChange={updateAssignmentView('status')}>
+                    <option value="">All statuses</option>
+                    <option value="pending">Pending</option>
+                    <option value="submitted">Submitted</option>
+                    <option value="feedback">Feedback Received</option>
+                  </select>
+                </label>
+                <label>Due date
+                  <select value={assignmentSort} onChange={updateAssignmentView('sort')}>
+                    <option value="soonest">Soonest first</option>
+                    <option value="latest">Latest first</option>
+                  </select>
+                </label>
+                <button className="secondary-button filter-reset" type="button" onClick={resetAssignmentView}>Clear filters</button>
+              </div>
 
-          <div className="assignment-pagination">
-            <span>Page {currentAssignmentPage} of {assignmentPageCount}</span>
-            <button className="secondary-button" type="button" disabled={currentAssignmentPage === 1} onClick={() => setAssignmentPage((page) => page - 1)}>Previous</button>
-            <button className="secondary-button" type="button" disabled={currentAssignmentPage >= assignmentPageCount} onClick={() => setAssignmentPage((page) => page + 1)}>Next</button>
-          </div>
+              {visibleAssignments.length ? (
+                <div className="section-scroll assignment-list">
+                  {visibleAssignments.map((assignment) => {
+                    const status = getStatusMeta(assignment.submission)
+                    return (
+                      <article className="assignment-card" key={assignment.id}>
+                        <div className="assignment-card-head">
+                          <div>
+                            <span className="subject-tag">{assignment.subject}</span>
+                            <h3>{assignment.title}</h3>
+                            <p>Due {formatDate(assignment.due_date)} · Teacher {assignment.teacher_name || 'Classroom'}</p>
+                          </div>
+                          <span className={`status-indicator ${status.className}`}>{status.label}</span>
+                        </div>
+                        <button className="feedback-open-button" type="button" onClick={() => setSelectedAssignmentId(assignment.id)}>Open assignment</button>
+                      </article>
+                    )
+                  })}
+                </div>
+              ) : (
+                <div className="empty-state">No assignments match these filters.</div>
+              )}
+
+              <div className="assignment-pagination">
+                <span>Page {currentAssignmentPage} of {assignmentPageCount}</span>
+                <button className="secondary-button" type="button" disabled={currentAssignmentPage === 1} onClick={() => setAssignmentPage((page) => page - 1)}>Previous</button>
+                <button className="secondary-button" type="button" disabled={currentAssignmentPage >= assignmentPageCount} onClick={() => setAssignmentPage((page) => page + 1)}>Next</button>
+              </div>
+            </>
+          )}
         </section>
       )}
 
@@ -411,7 +486,7 @@ export default function Student({ user }) {
         <section className="classroom-section">
           <div className="section-title">
             <div>
-              <p className="eyebrow">Previous work</p>
+              <p className="eyebrow">My Submissions</p>
               <h2>Your submissions</h2>
             </div>
           </div>
@@ -421,17 +496,15 @@ export default function Student({ user }) {
               {(submissions || []).map((item) => {
                 const status = getStatusMeta(item)
                 return (
-                  <article className="quick-assignment" key={item.id}>
-                    <span>{item.assignment?.subject || 'Submission'}</span>
-                    <strong>{item.assignment?.title || 'Assignment'}</strong>
-                    <small>Submitted {formatDate(item.submitted_at)}</small>
-                    <div style={{ marginTop: '12px' }}>
+                  <details className="student-submission-card" key={item.id}>
+                    <summary className="student-submission-summary">
+                      <strong>{item.assignment?.title || 'Assignment'}</strong>
+                      <span className="subject-tag">{item.assignment?.subject || 'Submission'}</span>
+                      <small>Submitted {formatDate(item.submitted_at)}</small>
                       <span className={`status-indicator ${status.className}`}>{status.label}</span>
-                    </div>
-                    <p style={{ marginTop: '10px', color: '#59746d', lineHeight: 1.6 }}>
-                      {item.feedback_status === 'REVIEWED' ? item.teacher_feedback || 'Your teacher submitted feedback without an additional comment.' : 'Your teacher is still reviewing this work.'}
-                    </p>
-                  </article>
+                    </summary>
+                    <FeedbackDetails item={item} />
+                  </details>
                 )
               })}
             </div>

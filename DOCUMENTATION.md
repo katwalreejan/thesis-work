@@ -1,22 +1,18 @@
-# OCR + Answer Grading — Implementation Documentation
+# Student Feedback System — Implementation Documentation
 
 ## Overview
 
-A minimal full-stack app: the user uploads a photo containing a question and
-its handwritten/printed answer. The backend extracts the text with PaddleOCR,
-sends the image to a vision-capable LLM (via OpenRouter) to identify the
-question/answer and judge correctness, and persists everything to MongoDB.
-The frontend is a single-page React app for uploading and viewing results.
+The React application provides teacher and student dashboards for class
+assignments, typed or uploaded submissions, AI feedback, and teacher review.
+FastAPI authenticates users with JWTs, stores application records in MongoDB,
+keeps uploaded work in `backend/uploads`, and grades text or OCR/image input
+through OpenRouter.
 
-```
-┌────────────┐   POST /api/upload   ┌──────────────────────────────────┐
-│  React UI  │ ───────────────────▶ │            FastAPI               │
-│ (Vite dev  │                      │  1. PaddleOCR  → extracted text  │
-│  server,   │                      │  2. OpenRouter → question/answer │
-│  :5173)    │ ◀─────────────────── │     grading (vision LLM)         │
-└────────────┘   {text, grading}    │  3. MongoDB    → persist result  │
-                                     └──────────────────────────────────┘
-```
+Student signup creates an account but does not issue a token; a separate
+login is required before a protected dashboard is shown. Students select a
+teacher-owned class during signup. Teacher API queries and file retrievals
+are scoped to the authenticated teacher and the students assigned to that
+teacher's class/assignment.
 
 ## Repository layout
 
@@ -59,26 +55,20 @@ ocr/
 
 ```python
 client = AsyncIOMotorClient(MONGODB_URI)
-db = client.get_default_database()      # resolves to "new" from the URI path
-ocr_results = db["ocr_results"]         # single collection for this feature
+db = client.get_default_database()
+users = db["users"]
+classes = db["classes"]
+subjects = db["subjects"]
+assignments = db["assignments"]
+submissions = db["submissions"]
+ocr_results = db["ocr_results"]         # legacy standalone uploads
 ```
 
-Each document stored:
-
-```json
-{
-  "_id": ObjectId,
-  "filename": "photo.png",
-  "text": "<raw OCR text, newline-joined>",
-  "grading": {
-    "question": "What is 2 + 2?",
-    "answer": "4",
-    "is_correct": true,
-    "feedback": "Correct answer."
-  },
-  "created_at": "<UTC datetime>"
-}
-```
+The main collections are `users`, `classes`, `subjects`, `assignments`,
+`submissions`, and the legacy `ocr_results` collection. Assignment
+submissions store typed text, OCR text, scores, AI/teacher feedback, and
+references to original files. Assignment files continue to be stored as
+MongoDB binary fields; student work is stored in `backend/uploads`.
 
 ### `feedback.py` — vision LLM grading
 
@@ -107,7 +97,46 @@ The model's raw response is stripped of any ```` ```json ```` fences and
 `is_correct: false` and the raw text in `feedback` so the request doesn't
 hard-fail.
 
-### `main.py` — API routes
+### `main.py` — API routes and workflow
+
+#### Authentication and class ownership
+
+- `POST /api/auth/signup/{student|teacher}` creates the account and returns a
+  success message without a JWT.
+- `POST /api/auth/login/{student|teacher}` issues the JWT after credentials
+  and role are verified. `/api/me` is used to restore an existing session.
+- Teacher classes carry a `teacher_id`; student signup records the selected
+  class ID and its teacher. Teachers can create Grade 1–10 classes with
+  sections A, B, or C; a unique random enrollment key is generated for each
+  class. Keys are encrypted for teacher-only display and stored with a
+  separate keyed hash for signup verification. Student signup requires the
+  key to match the selected class. Existing unambiguous student/assignment records
+  are linked to their class on startup without deleting or replacing data.
+- Teacher assignment, student, submission, feedback, and file endpoints
+  verify ownership server-side. `/api/files/{filename}` requires a valid
+  JWT and checks that the referenced submission belongs to the requesting
+  student or teacher.
+
+#### Assignment submissions
+
+`POST /api/student/assignments/{assignment_id}/submit` accepts multipart
+`answer_text`, an optional legacy `file`, and repeated `files` fields. A
+student may type, upload up to ten images/PDFs, or do both. Images are run
+through PaddleOCR; scanned PDF pages are rendered for OCR when no embedded
+text is present. A single image-only submission uses the vision grading
+flow; typed, PDF, and combined/multiple-file answers use text grading.
+Uploaded originals remain available to the student and the owning teacher.
+
+`POST` and `PATCH /api/teacher/assignments` accept multipart form data,
+including `assignment_file`. Assignment files are validated and stored in
+the existing MongoDB binary field, then served to the assignment's teacher
+or eligible students through `/api/assignments/{assignment_id}/file`.
+
+#### Legacy `POST /api/upload`
+
+The original standalone image-grading endpoint remains available for
+compatibility. It saves the uploaded image in the existing upload directory
+and returns a protected `/api/files/{filename}` link.
 
 #### `GET /api/health`
 
@@ -151,12 +180,10 @@ in dev.
 
 ### `App.jsx` behavior
 
-- On mount: `GET /api/health` → shows "Backend status: ok/unreachable".
-- File input + Upload button: button disabled until a file is selected.
-- On upload: `POST /api/upload` with `FormData`, shows `uploading...`, then
-  either an error state or the result.
-- Result rendering: shows the resolved `Correct`/`Incorrect` heading, the
-  detected question, the detected answer, and the model's feedback text.
+- On mount, an existing JWT is validated through `GET /api/me`.
+- Without a valid JWT, only the login/signup view is rendered.
+- Successful signup returns the user to login with a success message.
+- Successful login stores the JWT and renders the role-appropriate dashboard.
 
 ## Running locally
 
@@ -174,19 +201,14 @@ npm run dev
 ```
 Runs on `http://localhost:5173` (or next free port if occupied).
 
-## Known limitations / things to revisit
+## Operational notes
 
-- **No auth** — the API and DB have no access control; fine for local dev,
-  not for any shared deployment.
-- **Single collection, no indexes** — `ocr_results` has no index on
-  `created_at` or `filename`; fine at current scale.
-- **Free-tier LLM reliability** — the OpenRouter free model pool can be
-  rate-limited upstream (observed with Gemma during development). No retry
-  logic is implemented; a failed grading call currently surfaces as a 500
-  from `/api/upload` (via `response.raise_for_status()` in `feedback.py`).
-- **PaddleOCR text vs. LLM grading are independent** — OCR output is stored
-  for reference/search, but grading is done directly from the image, so the
-  two can disagree if OCR misreads something the LLM reads correctly (or
-  vice versa).
-- **No file size/type validation** on `/api/upload` — any file is accepted
-  and passed to both PaddleOCR and the vision model as-is.
+- **OpenRouter availability** — upstream failures are surfaced as request
+  errors; there is no retry queue.
+- **OCR initialization** — PaddleOCR is loaded lazily on the first image or
+  scanned-PDF request. Its first model download can take time.
+- **Upload limits** — assignment submissions accept up to ten image/PDF
+  files, each no larger than 10 MB; PDFs are limited to 30 pages.
+- **Class ownership migration** — pre-existing records are linked only when
+  a student has exactly one matching class; ambiguous records are left
+  unlinked rather than exposed across teachers.
