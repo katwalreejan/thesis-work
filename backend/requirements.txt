@@ -3,7 +3,7 @@ uvicorn
 python-multipart
 motor
 python-dotenv
-paddlepaddle
+paddlepaddle==3.3.0
 paddleocr
 python-bidi==0.4.2
 httpx
