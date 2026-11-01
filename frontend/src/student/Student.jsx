@@ -1,5 +1,5 @@
 ﻿import { useEffect, useState } from 'react'
-import { api, TOKEN_KEY } from '../api'
+import { API_BASE, api, TOKEN_KEY } from '../api'
 import SecureFile from '../components/SecureFile'
 
 const formatDate = (value) => value ? new Date(value).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'No date'
@@ -86,7 +86,7 @@ function UploadForm({ assignment, onDone }) {
     files.forEach((file) => body.append('files', file))
 
     try {
-      const response = await fetch(`/api/student/assignments/${assignment.id}/submit`, {
+      const response = await fetch(`${API_BASE}/api/student/assignments/${assignment.id}/submit`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${localStorage.getItem(TOKEN_KEY)}` },
         body,

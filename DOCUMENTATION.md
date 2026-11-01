@@ -38,7 +38,8 @@ ocr/
 
 ### Stack
 
-- **FastAPI** — HTTP API, CORS restricted to `http://localhost:5173`.
+- **FastAPI** — HTTP API, CORS origins configured by `CORS_ORIGINS` (defaults
+  to `http://localhost:5173`).
 - **PaddleOCR** (`paddleocr`, `paddlepaddle`) — local, offline text extraction.
 - **Motor** — async MongoDB driver.
 - **httpx** — async HTTP client used to call OpenRouter.
@@ -50,6 +51,7 @@ ocr/
 |-----------------------|------------------------------------------------------------------|
 | `MONGODB_URI`         | `mongodb://localhost:27017/new` — the database name is `new`.  |
 | `OPENROUTER_API_KEY`  | Auth for the OpenRouter chat completions API.                  |
+| `CORS_ORIGINS`        | Comma-separated frontend origins allowed by CORS. Defaults to `http://localhost:5173`; set this to your deployed frontend URL on Render. |
 
 ### `db.py` — MongoDB connection
 
@@ -171,12 +173,21 @@ request after a fresh clone will be slow.
 - **React + Vite**, minimal template (logos/boilerplate content stripped).
 - No routing, no state management library — a single `App.jsx` component.
 
+### Frontend API URL configuration
+
+The frontend reads `VITE_API_URL` from `frontend/.env` or the frontend
+hosting environment. Leave it empty for local development; Vite's dev-server
+proxy forwards `/api` requests to `http://localhost:8000`. For deployment,
+set `VITE_API_URL` to the backend origin (for example,
+`https://feedbackapp-jf5d.onrender.com`) in the frontend service's build
+environment. The value is used when Vite builds the frontend.
+
+`frontend/.env` is ignored by Git. Use `frontend/.env.example` as the template.
+
 ### `vite.config.js`
 
 Proxies any `/api/*` request from the dev server (`:5173`) to
-`http://localhost:8000`, so the frontend can call relative paths like
-`fetch('/api/upload')` without hardcoding a backend origin or hitting CORS
-in dev.
+`http://localhost:8000` for local development when `VITE_API_URL` is empty.
 
 ### `App.jsx` behavior
 

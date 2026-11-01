@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { TOKEN_KEY } from '../api'
+import { API_BASE, TOKEN_KEY } from '../api'
 
 const REVIEW_STEPS = [['01', 'Read', 'We read the text on your page.'], ['02', 'Check', 'We check your answer.'], ['03', 'Learn', 'Feedback helps you try again.']]
 
@@ -14,7 +14,7 @@ export default function AssignmentUpload({ onComplete, onError }) {
     const body = new FormData()
     body.append('file', file)
     try {
-      const response = await fetch('/api/upload', { method: 'POST', headers: { Authorization: `Bearer ${localStorage.getItem(TOKEN_KEY)}` }, body })
+      const response = await fetch(`${API_BASE}/api/upload`, { method: 'POST', headers: { Authorization: `Bearer ${localStorage.getItem(TOKEN_KEY)}` }, body })
       const result = await response.json()
       if (!response.ok) throw new Error(result.detail || 'Upload did not work')
       setStatus('Feedback ready')

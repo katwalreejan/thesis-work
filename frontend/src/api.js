@@ -1,9 +1,10 @@
 export const TOKEN_KEY = 'sfs_token'
+export const API_BASE = (import.meta.env.VITE_API_URL || '').replace(/\/+$/, '')
 
 export const api = async (path, options = {}) => {
   const token = localStorage.getItem(TOKEN_KEY)
   const isFormData = options.body instanceof FormData
-  const response = await fetch(`/api${path}`, {
+  const response = await fetch(`${API_BASE}/api${path}`, {
     ...options,
     headers: {
       ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
@@ -18,7 +19,7 @@ export const api = async (path, options = {}) => {
 
 export const apiFile = async (path) => {
   const token = localStorage.getItem(TOKEN_KEY)
-  const response = await fetch(path, {
+  const response = await fetch(`${API_BASE}${path}`, {
     headers: token ? { Authorization: `Bearer ${token}` } : {},
   })
   if (!response.ok) {
